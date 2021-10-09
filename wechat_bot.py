@@ -1,10 +1,11 @@
 import requests
-webhook = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=d6e82e4e-3dad-4b11-a799-9631885992fa"
+import shangqi_statistics as ss
+webhook = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ae54da2e-809f-47bf-90cc-d10c9a0a27da"
 msg = """
 {
     "msgtype": "text",
     "text": {
-        "content": "你啥玩意儿"
+        "content": "hello"
     }
 }
 """
