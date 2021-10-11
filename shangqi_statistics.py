@@ -2,8 +2,18 @@ from typing import Type
 import requests
 import json
 import re
-import csv
 import pandas as pd
+from send_email import send_email
+from wechat_bot import send_notification
+import os
+
+def confirm_choice(msg):
+    confirm = input("[c]Confirm: {}".format(msg))
+    if confirm != 'c' and confirm != 'v':
+        print("\n Invalid Option. Please Enter a Valid Option.")
+        return confirm_choice(msg) 
+    # print (confirm)
+    return confirm
 
 def col_type(result,row,col_name):
     # print(row,"🐔",results[row]["properties"][col_name]["type"])
@@ -73,6 +83,8 @@ def get_result(projects_and_pool_ids_and_type,query,payload_variables_structure,
             pd.DataFrame(results).to_excel(writer)
 
 
+
+
 if __name__ == "__main__":
     #统计某个时间段内实际验收数据量
     query_of_accepted_data_between_two_times = """
@@ -105,30 +117,37 @@ if __name__ == "__main__":
         }
     
 
-    start_time =  "2021-10-09 8:00:00"
-    end_time =  "2021-10-09 19:00:00"
-    file = "/Users/lizhe/Desktop/shangqi-hasura.json"   # 存放url、pwd和token的json
+    start_time =  "2021-10-09 17:00:00"
+    end_time =  "2021-10-11 17:00:00"
+    confirm_msg = "起始时间为：{}       截止时间为:{}\n".format(start_time,end_time)
+    confirm_choice(confirm_msg) #confirm
+    file = "/Users/lizhe/Desktop/shangqi-hasura.json"   # 存放 url、pwd 和 token 的 json
     with open(file,'r') as f:
         obj = json.load(f)
         url = obj["url"]
         pwd = obj["x-hasura-admin-secret"]
         token = obj["token"]
     target_table_url = "https://api.notion.com/v1/databases/3d40984aec444edaa74d1d2dbc4402b8/query"
-    to = "/Users/lizhe/Desktop/shangqi-{type}-{start}-{end}.xls"
-    #统计标注
+    to = "shangqi-{type}.xls"
+
+    '''统计标注
+    '''
+    file_1 = to.format(type="annotated",start=start_time,end=end_time)
+    file_2 = to.format(type="accepted",start=start_time,end=end_time)
     projects_and_pool_ids_and_type = read_table(target_table_url,token,col_name="标注池ID")
     get_result(projects_and_pool_ids_and_type,
                 query=query_of_annotated_or_reviewed_data_between_two_times,
                 payload_variables_structure=payload_variables_structure,
-                to_file=to.format(type="annotated",start=start_time,end=end_time))
+                to_file=file_1)
     
-    #统计客户验收
+    '''统计客户验收
+    '''
     projects_and_pool_ids_and_type = read_table(target_table_url,token,col_name="客户抽检池ID")
     print(projects_and_pool_ids_and_type)
     get_result(projects_and_pool_ids_and_type,
                 query=query_of_accepted_data_between_two_times,
                 payload_variables_structure=payload_variables_structure,
-                to_file=to.format(type="accepted",start=start_time,end=end_time))
+                to_file=file_2)
     
     #统计星尘质检
     # projects_and_pool_ids = read_table(target_table_url,token,col_name="星尘抽检池ID")
@@ -137,3 +156,24 @@ if __name__ == "__main__":
     #             query=query_of_accepted_data_between_two_times,
     #             payload_variables_structure=payload_variables_structure,
     #             to_file=to.format(type="reviewed",start=start_time,end=end_time))
+
+    '''send email
+    '''
+    sender_email = "zhe.li@stardust.ai"
+    receiver_email = "wenjing.zhang@stardust.ai"
+    text = """This is an automated email message:\n===========================\n 以下为上汽项目 {start} 到 {end} 的统计数据\n===========================\n\n\n===========================\n\n""".format(start=start_time,end=end_time)
+    send_email([file_1,file_2],sender_email,receiver_email,text=text)
+    os.remove(file_1)
+    os.remove(file_2)
+
+
+    '''send_notification
+    '''
+    # webhook = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ae54da2e-809f-47bf-90cc-d10c9a0a27da" #测试
+    shangqi_webhook = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bc595d9b-3028-417e-bf43-2f2dc7e1b9e2"
+    notification = """{"msgtype": "text",
+  "text": {
+    "content": "Hi，@张文静，上汽的每日统计已发送的邮箱，请查收\n邮箱地址：https://mail.google.com/mail/u/0/#""
+  }
+}"""
+    send_notification(msg=notification,webhook=shangqi_webhook)   
