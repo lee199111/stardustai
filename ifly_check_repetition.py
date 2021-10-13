@@ -40,10 +40,8 @@ def get_data(path,num,file_name):
         with open(file,'r',encoding="utf-8") as f:
             lines = f.readlines()
             temp = []
-            i = 0
             for line in lines[1:num*4:4]:
                 temp.append(line.rstrip('\n'))
-                i += 1
                 # with open("/Users/lizhe/Desktop/qualified/123_{file_name}.txt".format(file_name=file_name),'a',encoding="utf-8") as f:
                     # f.write(line)
                 # print(line)
@@ -54,9 +52,9 @@ def get_data(path,num,file_name):
 if __name__ == '__main__':
     # file_name = "Italian_RMDM_XC_XLJ_20210820_1"
     file_name = "*"
-    num = 1000   
+    num = 1000
     
-    path = "/Users/lizhe/Desktop/qualified/{file_name}.txt".format(file_name=file_name)
+    path = "{file_name}.txt".format(file_name=file_name)
     result = {}
     data = get_data(path,num=num,file_name=file_name)
     for key,value in data.items():
