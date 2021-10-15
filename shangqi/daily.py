@@ -12,7 +12,7 @@ import os
 
 #统计某个时间段内某个工作池创建量（不去重）
 query_of_created_count = """
-query countTaskRunsByTimeAndPoolId($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10) {
+query query_of_created_count($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10) {
 task_runs_aggregate(where: {created_at: {_gte: $start_time}, _and: {created_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids}}}}) {
     aggregate {
     count
@@ -20,21 +20,9 @@ task_runs_aggregate(where: {created_at: {_gte: $start_time}, _and: {created_at: 
 }
 }
 """
-
-#统计某个时间段内的某个工作池完成量（不去重）
-query_of_finished_count="""
-query countTaskRunsByTimeAndPoolId($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10) {
-task_runs_aggregate(where: {finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids}}}}) {
-    aggregate {
-    count
-    }
-}
-}
-"""
-
 #统计某个时间段内的某个工作池创建量（去重）
 query_of_distinct_created_count = '''
-query countTaskRunsByTimeAndPoolId_distinct_by_tasks($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
+query query_of_distinct_created_count($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
   tasks_aggregate(where:{task_runs:{created_at: {_gte: $start_time}, _and: {created_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids}}}}}){
     aggregate{
       count
@@ -43,10 +31,41 @@ query countTaskRunsByTimeAndPoolId_distinct_by_tasks($start_time: timestamptz = 
 }
 '''
 
+#统计某个时间段内的某个工作池完成量（不去重）
+query_of_finished_count="""
+query query_of_finished_count($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10) {
+task_runs_aggregate(where: {finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids} _and:{task_run_status:{_eq:FINISHED}}}}}) {
+    aggregate {
+    count
+    }
+}
+}
+"""
 
-query_of_finished_and_forward_count='''
-query countTaskRunsByTimeAndPoolId_distinct_and_forward_by_tasks($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
-  tasks_aggregate(where:{task_runs:{finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids} _and: {task_run_submit_direction: {_eq: FORWARD}}} }}}){
+# 统计某个时间段内的某个工作池完成量并且方向为forward（去重、总量）
+query_of_finished_and_forward_count_all='''
+query query_of_finished_and_forward_count_all($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
+  tasks_aggregate(where:{task_runs:{finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids} _and: {task_run_submit_direction: {_eq: FORWARD} }} }}}){
+    aggregate{
+      count
+    }
+  }
+}'''
+
+# 统计某个时间段内的某个工作池完成量并且方向为forward（去重、还在工作池）
+query_of_finished_and_forward_and_not_moved_count='''
+query query_of_finished_and_forward_and_not_moved_count($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
+  tasks_aggregate(where:{task_runs:{finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids} _and: {task_run_submit_direction: {_eq: FORWARD} _and:{task_run_status:{_neq:FINISHED}}}} }}}){
+    aggregate{
+      count
+    }
+  }
+}'''
+
+# 统计某个时间段内的某个工作池完成量并且方向为forward（去重、不在工作池）
+query_of_finished_and_forward_and_moved_count='''
+query query_of_finished_and_forward_and_moved_count($start_time: timestamptz = "", $end_time: timestamptz = "", $pool_ids: [Int!] = 10){
+  tasks_aggregate(where:{task_runs:{finished_at: {_gte: $start_time}, _and: {finished_at: {_lte: $end_time}, _and: {pool_id: {_in: $pool_ids} _and: {task_run_submit_direction: {_eq: FORWARD} _and:{task_run_status:{_eq:FINISHED}}}} }}}){
     aggregate{
       count
     }
@@ -74,7 +93,12 @@ auth_file = "/Users/lizhe/Desktop/shangqi-hasura.json"   # 存放 url、pwd 和 
 target_table_url = "https://api.notion.com/v1/databases/3d40984aec444edaa74d1d2dbc4402b8/query"
 to = "shangqi_{}_{}.xls".format(start_time,end_time)
 
-sheets = {"星尘提交量（不去重）":["客户抽检池",query_of_created_count],"星尘提交量（去重）":["客户抽检池",query_of_distinct_created_count],"上汽验收合格量":["客户抽检池",query_of_finished_and_forward_count]}
+sheets = {"星尘提交量（不去重）":["客户抽检池",query_of_created_count],
+          "星尘提交量（去重）":["客户抽检池",query_of_distinct_created_count],
+          "上汽验收合格总量":["客户抽检池",query_of_finished_and_forward_count_all],
+          "上汽验收合格量（还在上汽抽检池）":["客户抽检池",query_of_finished_and_forward_and_not_moved_count],
+          "上汽验收合格量（已出上汽抽检池）":["客户抽检池",query_of_finished_and_forward_and_moved_count]
+          }
 
 try:
   os.remove(to)
