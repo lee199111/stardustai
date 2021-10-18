@@ -6,6 +6,7 @@ import pandas as pd
 from send_email import send_email
 from wechat_bot import send_notification
 import os
+import numpy as np
 
 def confirm_choice(msg):
     confirm = input("[c]Confirm: {}".format(msg))
@@ -36,9 +37,14 @@ def read_table(url_read,token,col_name):
             key = results[i]["properties"]["项目名"][col_type(results,i,"项目名")][0]["plain_text"]
             value = results[i]["properties"][col_name][col_type(results,i,col_name)][0]["plain_text"]
             type = results[i]["properties"]["项目类型"][col_type(results,i,"项目类型")]["name"]
-            print(results[i]["properties"]["项目类型"])
+            frame = int(results[i]["properties"]["帧数"][col_type(results,i,"帧数")][0]["plain_text"])
+            # print(frame)
+            # print(results[i]["properties"]["项目类型"])
             if key not in projects_info.keys():
-                projects_info[key] = [list(map(int,re.findall('[0-9]+',value) )),type] #只取数字，其他都不要
+                if frame == 1:
+                    projects_info[key] = [list(map(int,re.findall('[0-9]+',value) )),type,frame,"张"] #只取数字，其他都不要
+                else:
+                    projects_info[key] = [list(map(int,re.findall('[0-9]+',value) )),type,frame,"帧"]
                 # break
             else:
                 print("😂")
@@ -70,14 +76,14 @@ def set_variables(pool_ids,payload_variables_structure,start,end):
     return payload_variables_structure
 
 
-
-def write_csv(file,sheet_name,data):
+def write_csv(file,sheet_name,data,header):
     if not os.path.exists(file):
         with pd.ExcelWriter(path=file, mode="w",engine="openpyxl") as writer:
-                data.to_excel(writer,sheet_name=sheet_name)
+                data.to_excel(writer,sheet_name=sheet_name,header=header)
     else:
         with pd.ExcelWriter(path=file, mode="a",engine="openpyxl") as writer:
-                data.to_excel(writer,sheet_name=sheet_name)
+                data.to_excel(writer,sheet_name=sheet_name,header=header)
+
 
 def auth(file):
     with open(file,'r') as f:
@@ -88,8 +94,9 @@ def auth(file):
     return url,pwd,token
 
 
-def run(auth_file,table_url,col_name,start,end,hasura_query,hasura_variables,to_file,to_sheet="sheet-1"):
-    results = {"项目名称":[],"数量":[],"项目类型":[],}
+def run(auth_file,table_url,col_name,start,end,hasura_query,hasura_variables):
+    results = {"项目名称":[],"张数总计":[],"项目类型":[]}
+    results_sum = {}
     hasura_url,hasura_pwd,notion_token = auth(auth_file)  #读取token之类的东西
     notion_results = read_table(table_url,notion_token,col_name=col_name) # 从 notion 读取必要数据
     for k,v in notion_results.items():
@@ -97,12 +104,43 @@ def run(auth_file,table_url,col_name,start,end,hasura_query,hasura_variables,to_
         hasura_variables["end_time"] = end
         hasura_variables["pool_ids"] = v[0]
         r = get_result_from_hasura(url=hasura_url,pwd=hasura_pwd,query=hasura_query,variables=hasura_variables)  # 请求 hasura
-        print(r)
+        # print(r)
         count = list(r["data"].values())[0]['aggregate']['count']
+        frame_count = count * v[2]
         results["项目名称"].append(k)
-        results["数量"].append(count)
+        results["张数总计"].append(count)
+        # results["帧数总计"].append(frame_count)
+        # results["平均每张帧数"].append(v[2])
         results["项目类型"].append(v[1])
-    write_csv(file=to_file,sheet_name=to_sheet,data=pd.DataFrame(results))
+        if v[1] not in results_sum.keys():
+            results_sum[v[1]] = [count]
+        else:
+            results_sum[v[1]][0] += count
+    return results,results_sum
+        
+def run_np(auth_file,table_url,col_name,start,end,hasura_queries,hasura_variables):
+    results = []
+    hasura_url,hasura_pwd,notion_token = auth(auth_file)  #读取token之类的东西
+    notion_results = read_table(table_url,notion_token,col_name=col_name) # 从 notion 读取必要数据
+    for k,v in notion_results.items():
+        temp = []
+        temp_frame = []
+        hasura_variables["start_time"] = start
+        hasura_variables["end_time"] = end
+        hasura_variables["pool_ids"] = v[0]
+        temp.append(k)
+        temp.append(v[1])
+        for hasura_query in hasura_queries:
+            r = get_result_from_hasura(url=hasura_url,pwd=hasura_pwd,query=hasura_query,variables=hasura_variables)  # 请求 hasura
+            count = list(r["data"].values())[0]['aggregate']['count']
+            temp.append(count)
+            frame_count = count * v[2]
+            print(count,'   ',v[2],'   ',count*v[2])
+            temp_frame.append(frame_count)
+        temp = temp + temp_frame
+        results.append(temp)
+    return results
+    
 
 
 if __name__ == "__main__":
