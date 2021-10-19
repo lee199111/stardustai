@@ -1,8 +1,9 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from shangqi_statistics import auth,read_table,get_result_from_hasura,run
+from shangqi_statistics import auth,read_table,get_result_from_hasura,write_csv,run_np
 import os
+import datetime
 
 
 #统计某个时间段内某个工作池创建量（不去重）
@@ -95,29 +96,50 @@ sheets = {"星尘提交量（不去重）":["客户抽检池",query_of_created_c
           "上汽验收合格量（已出上汽抽检池）":["客户抽检池",query_of_finished_and_forward_and_moved_count]
           }
 
-
-result = {}
-for k,v in sheets.items():
-    r,r_s = run(auth_file=auth_file,
-                table_url=target_table_url,
-                col_name=v[0],
-                start=start_time, 
-                end=end_time,
-                hasura_query=v[1],
-                hasura_variables=s_e_p_variables)
-    for k_,v_ in r.items():
-        if k_ == "张数总计" :
-            result = {**result,**{k_ + '-' + k:v_}}
-        elif k_ == "项目名称" and k_ not in result.keys():
-            result = {**result,**{k_:v_}}
-        elif k_ == "项目类型" and k_ not in result.keys():
-            result = {**{k_:v_},**result}
+@st.cache
+def convert_df(df):
+    return df.to_csv().encode('utf-8')
 
 
-df = pd.DataFrame(result)
-st.table(df)
+def run(start="2021-10-8 20:00:00",end="2021-10-15 20:00:00"):
+    result = {}
+    hasura_queries = []
+    for k,v in sheets.items():
+        hasura_queries.append(v[1])
+    with st.spinner('wait for it ...'):
+        r = run_np(auth_file=auth_file,
+                        table_url=target_table_url,
+                        col_name=v[0],
+                        start=start, 
+                        end=end,
+                        hasura_queries=hasura_queries,
+                        hasura_variables=s_e_p_variables)
+    st.success('Done!')
+    return r
+    
+
 st.title('上汽统计')
-print("🔞🔞🔞🔞🔞")
+today = str(datetime.date.today())
+yestoday = str(datetime.date.today() - datetime.timedelta(1))
+t1 = st.text_input('start',value=yestoday+' 20:00:00')
+t2 = st.text_input('end',value=today+' 20:00:00')
+button_click = st.button("确认",)
+if button_click == True:
+    r = run(t1,t2)
+    columns = ["项目名称","项目类型"]+[k for k in sheets.keys()] + ["帧数--"+k for k in sheets.keys()]
+    # print(columns)
+    # write_csv(to,sheet_name="sheet_name",data=pd.DataFrame(r),header=columns)
+    df = pd.DataFrame(r,columns=columns)
+    csv = convert_df(df)
+    st.download_button(
+            label="Download data as CSV",
+            data=csv,
+            file_name='shangqi_{}_{}.csv'.format(t1,t2),
+            mime='text/csv',
+            )
+    st.write(df)
+
+print("waiting....🔞🔞🔞🔞🔞")
 
 
 

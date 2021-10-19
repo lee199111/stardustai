@@ -45,7 +45,7 @@ def read_table(url_read,token,col_name):
                     projects_info[key] = [list(map(int,re.findall('[0-9]+',value) )),type,frame,"张"] #只取数字，其他都不要
                 else:
                     projects_info[key] = [list(map(int,re.findall('[0-9]+',value) )),type,frame,"帧"]
-                # break
+                break
             else:
                 print("😂")
         except:
